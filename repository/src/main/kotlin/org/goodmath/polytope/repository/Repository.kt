@@ -55,5 +55,5 @@ class Repository(val cfg: Config) {
     val histories = Histories(db, this)
     val projects = Projects(db, this)
 
-    
+
 }

@@ -45,20 +45,57 @@ class Artifacts(val db: MongoDatabase, val repos: Repository) {
     val artifactsCollection = db.getCollection("artifacts", Artifact::class.java)
     val versionsCollection = db.getCollection("versions", ArtifactVersion::class.java)
 
+    /**
+     * Get an API that can be used to store and retrieve
+     * artifacts and users, under the authorization and
+     * privileges of an authenticated user.
+     * @param auth an auth token provided by the Users api.
+     * @return the artifacts API object.
+     * @throws PolytopeException if the users permissions
+     *   don't permit them to read or write artifacts in
+     *   the repository.
+     */
     fun withAuth(auth: AuthToken): AuthenticatedArtifacts {
         return AuthenticatedArtifacts(auth)
     }
 
 
     class AuthenticatedArtifacts(val auth: AuthToken) {
+
+        /**
+         * Retrieve an artifact from the database.
+         * @param project the project containing the artifact.
+         * @param id the artifact ID.
+         * @return the full Artifact record.
+         * @throws PolytopeError if the artifact isn't found, if the user
+         *    doesn't have permission to read it, or if there's some internal
+         *    error retrieving it.
+         */
         fun retrieveArtifact(project: String, id: ArtifactId): Artifact {
             TODO()
         }
 
+        /**
+         * Retrieve a version of an artifact from the database.
+         * @param project the project containing the artifact.
+         * @param id the version ID.
+         * @return the full ArtifactVersion record.
+         * @throws PolytopeError if the version isn't found, if the user
+         *    doesn't have permission to read it, or if there's some internal
+         *    error retrieving it.
+         */
         fun retrieveVersion(project: String, versionId: VersionId): ArtifactVersion {
             TODO()
         }
 
+        /**
+         * Store a new artifact from the database.
+         * @param project the project containing the artifact.
+         * @param artifact the new artifact to save.
+         * @throws PolytopeError if the artifact already exists, if the user
+         *    doesn't have permission to write it, or if there's some internal
+         *    error storing it.
+         */
         fun storeArtifact(artifact: Artifact) {
             TODO()
         }

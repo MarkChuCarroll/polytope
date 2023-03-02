@@ -17,9 +17,10 @@
 package org.goodmath.polytope.repository.data
 
 import org.bson.types.ObjectId
+import java.util.*
 
 data class ArtifactId(val id: ObjectId)
 data class VersionId(val artifactId: ArtifactId, val versionId: ObjectId)
-data class ContentId(val id: ObjectId, val category: String)
+data class ContentId(val id: UUID, val category: String)
 data class ChangeId(val id: ObjectId)
 data class ChangeStepId(val change: ChangeId, val id: ObjectId)
