@@ -17,14 +17,10 @@
 package org.goodmath.polytope.repository.data
 
 import com.mongodb.client.MongoDatabase
-import org.bson.types.ObjectId
 import org.goodmath.polytope.org.goodmath.polytope.PolytopeException
 import org.goodmath.polytope.repository.Config
 import org.goodmath.polytope.repository.Repository
-import org.litote.kmongo.eq
-import org.litote.kmongo.findOne
-import org.litote.kmongo.match
-import org.litote.kmongo.save
+import org.litote.kmongo.*
 import java.security.MessageDigest
 import java.time.Instant
 import kotlin.text.Charsets.UTF_8
@@ -35,21 +31,14 @@ import kotlin.text.Charsets.UTF_8
 // This is garbage.
 // This information should be here - plus some secret that allows
 // us to check whether the token is valid.
-data class AuthToken(val userId: String,
-                     val permissions: List<Permission>) {
+data class AuthenticatedUser(val userId: String,
+                             val permissions: List<Permission>) {
 
 }
 
-enum class Action {
-    Read, Write, Admin, Delete
-}
-enum class Realm {
-    Project, Universe
-}
-data class Permission(val action: Action, val realm: Realm, val project: String?)
 
 data class User(
-    val id: ObjectId,
+    val id: Id<User>,
     val username: String,
     val fullName: String,
     val permissions: List<Permission>,
@@ -60,18 +49,20 @@ data class User(
 )
 
 class Users(db: MongoDatabase, repos: Repository) {
-    val users = db.getCollection("users", User::class.java)
+    val users = db.getCollection(USERS_COLL, User::class.java)
 
-    fun validatePermission(auth: AuthToken, action: Action, project: String): Boolean {
-        return (auth.permissions.any {
-            (it.realm == Realm.Universe && it.action >= action) ||
-                    (it.realm == Realm.Project && project == it.project &&
-                            it.action >= action)
-        })
+    fun permits(auth: AuthenticatedUser, action: Action, project: String?): Boolean {
+        return auth.permissions.any {
+            if (project == null) {
+                it.permitsRepositoryAction(action)
+            } else {
+                it.permitsProjectAction(action, project)
+            }
+        }
     }
 
-    fun throwWithoutPermission(auth: AuthToken, action: Action,project: String) {
-        if (!validatePermission(auth, action, project)) {
+    fun validatePermissions(auth: AuthenticatedUser, action: Action, project: String?) {
+        if (!permits(auth, action, project)) {
             throw PolytopeException(PolytopeException.Kind.Permission,
                 "User permission denied")
         }
@@ -89,7 +80,7 @@ class Users(db: MongoDatabase, repos: Repository) {
     }
 
     fun authenticate(username: String,
-                     password: String): AuthToken {
+                     password: String): AuthenticatedUser {
         val user = users.findOne { match(User::username eq username) }
             ?: throw PolytopeException(PolytopeException.Kind.NotFound,
                 "User ${username} not found")
@@ -99,17 +90,18 @@ class Users(db: MongoDatabase, repos: Repository) {
                 PolytopeException.Kind.Authentication,
                 "Authentication failed")
         }
-        return AuthToken(username, user.permissions)
+        return AuthenticatedUser(username, user.permissions)
 
 
     }
 
-    fun withAuth(a: AuthToken): AuthenticatedUsers {
+    fun withAuth(a: AuthenticatedUser): AuthenticatedUsers {
         return AuthenticatedUsers(a)
     }
 
-    inner class AuthenticatedUsers(val auth: AuthToken) {
+    inner class AuthenticatedUsers(val auth: AuthenticatedUser) {
         fun retrieveUser(username: String): User {
+            validatePermissions(auth, Action.Admin, null)
             val result = users.findOne(match(User::username eq username))
                 ?: throw PolytopeException(PolytopeException.Kind.NotFound,
                     "User $username not found")
@@ -117,6 +109,7 @@ class Users(db: MongoDatabase, repos: Repository) {
         }
 
         fun create(user: User): User {
+            validatePermissions(auth, Action.Admin, null)
             if (exists(user.username)) {
                 throw PolytopeException(PolytopeException.Kind.InvalidParameter,
                     "User with username '${user.username} already exists")
@@ -129,31 +122,39 @@ class Users(db: MongoDatabase, repos: Repository) {
         }
 
         fun exists(username: String): Boolean {
+            validatePermissions(auth, Action.Admin, null)
             val u = users.findOne(match(User::username eq username))
             return u == null
         }
 
         fun grantPermissions(username: String, perms: List<Permission>) {
+            validatePermissions(auth, Action.Admin, null)
             val u = retrieveUser(username)
             val newPermissions = (u.permissions + perms).distinct()
             users.save(u.copy(permissions = newPermissions))
         }
 
         fun revokePermission(username: String, perms: List<Permission>) {
+            validatePermissions(auth, Action.Admin, null)
             val u = retrieveUser(username)
             val newPermissions = u.permissions - perms
             users.save(u.copy(permissions = newPermissions))
         }
 
         fun list(): List<User> {
+            validatePermissions(auth, Action.Admin, null)
             return users.find().toList().map { it.copy(password="<redacted>") }
         }
 
     }
 
     companion object {
-        fun initializeStorage(cfg: Config) {
 
+        val USERS_COLL = "users"
+        fun initializeStorage(cfg: Config, db: MongoDatabase) {
+            // Make sure the collection exists.
+            val users = db.getCollection(USERS_COLL, User::class.java)
+            users.createIndex(ascendingIndex(User::username))
         }
     }
 

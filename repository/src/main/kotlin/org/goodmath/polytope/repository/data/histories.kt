@@ -17,12 +17,12 @@ package org.goodmath.polytope.repository.data
 
 import com.mongodb.client.MongoDatabase
 import java.time.Instant
-import org.bson.types.ObjectId
 import org.goodmath.polytope.repository.Config
 import org.goodmath.polytope.repository.Repository
+import org.litote.kmongo.Id
 
 data class History(
-    val id: ObjectId,
+    val _id: Id<History>,
     val name: String,
     val description: String,
     val timestamp: Instant,
@@ -31,11 +31,12 @@ data class History(
 )
 
 data class HistoryVersion(
-    val id: ObjectId,
+    val id: Id<HistoryVersion>,
     val project: String,
-    val history_name: String,
+    val historyName: String,
     val version: Int,
-    val baseline: VersionId
+    val baselineId: Id<Artifact>,
+    val baselineVersionId: Id<ArtifactVersion>
 )
 
 
@@ -43,12 +44,12 @@ class Histories(val db: MongoDatabase, val repos: Repository) {
     val histories = db.getCollection("histories", History::class.java)
     val historyVersions = db.getCollection("historyversions", HistoryVersion::class.java)
 
-    fun withAuth(auth: AuthToken) : AuthenticatedHistoriesDatastore {
+    fun withAuth(auth: AuthenticatedUser) : AuthenticatedHistoriesDatastore {
         return AuthenticatedHistoriesDatastore(auth)
 
     }
 
-    class AuthenticatedHistoriesDatastore(val auth: AuthToken) {
+    class AuthenticatedHistoriesDatastore(val auth: AuthenticatedUser) {
         fun retrieveHistory(project: String, history: String): History {
             TODO()
 
@@ -71,7 +72,7 @@ class Histories(val db: MongoDatabase, val repos: Repository) {
 
         fun addVersion(
             project: String, history: String,
-            change: ChangeId, baseline: VersionId
+            change: Id<Change>, baseline: Id<ArtifactVersion>
         ): HistoryVersion {
             TODO()
 
@@ -84,7 +85,7 @@ class Histories(val db: MongoDatabase, val repos: Repository) {
 
 
     companion object {
-        fun initializeStorage(cfg: Config) {
+        fun initializeStorage(cfg: Config, db: MongoDatabase) {
 
         }
     }

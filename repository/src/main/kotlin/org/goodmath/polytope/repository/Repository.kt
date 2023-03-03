@@ -41,11 +41,13 @@ data class Config(
 class Repository(val cfg: Config) {
     companion object {
         fun initializeStorage(cfg: Config) {
-            Users.initializeStorage(cfg)
-            Artifacts.initializeStorage(cfg)
-            Changes.initializeStorage(cfg)
-            Histories.initializeStorage(cfg)
-            Projects.initializeStorage(cfg)
+            val mongoClient = MongoClients.create(cfg.db.serverUrl)
+            val db = mongoClient.getDatabase(cfg.db.dbName)
+            Users.initializeStorage(cfg, db)
+            Artifacts.initializeStorage(cfg, db)
+            Changes.initializeStorage(cfg, db)
+            Histories.initializeStorage(cfg,db)
+            Projects.initializeStorage(cfg, db)
         }
     }
     private val mongoClient = MongoClients.create(cfg.db.serverUrl)

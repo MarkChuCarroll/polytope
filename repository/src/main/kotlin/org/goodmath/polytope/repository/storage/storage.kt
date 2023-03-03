@@ -1,7 +1,6 @@
 package org.goodmath.polytope.repository.storage
 
 import org.goodmath.polytope.org.goodmath.polytope.PolytopeException
-import org.goodmath.polytope.repository.data.ContentId
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.file.Path
@@ -9,6 +8,11 @@ import java.util.*
 import kotlin.io.path.div
 import kotlin.io.path.exists
 
+
+data class ContentId(
+    val id: UUID,
+    val category: String
+)
 interface Storage {
     fun storeBlob(content: ByteArray): ContentId
     fun retrieveBlob(id: ContentId): ByteArray
@@ -42,7 +46,7 @@ class SimpleFileStorage(val baseDir: Path): Storage {
         }
         val transDir = baseDir / "transient"
         if (!transDir.toFile().exists()) {
-            if (!transDir.toFile().mkdir()) {
+            if (!(baseDir / "transient").toFile().mkdir()) {
                 throw PolytopeException(PolytopeException.Kind.Internal,
                     "Unable to create transient storage")
             }

@@ -15,6 +15,8 @@
  */
 package org.goodmath.polytope.repository.data
 
+import org.litote.kmongo.Id
+
 sealed interface ProjectVersionSpecifier {
     enum class Kind {
         History, ChangeId, ChangeName, ChangeStepId
@@ -33,7 +35,7 @@ sealed interface ProjectVersionSpecifier {
 
     data class ChangeIdPVS(
         override val project: String,
-        val changeId: ChangeId
+        val changeId: Id<Change>
     ) : ProjectVersionSpecifier {
         override val kind: Kind = Kind.ChangeId
     }
@@ -47,7 +49,7 @@ sealed interface ProjectVersionSpecifier {
 
     data class ChangeStepPVS(
         override val project: String,
-        val changeStepId: ChangeStepId
+        val changeStepId: Id<ChangeStep>
     ) : ProjectVersionSpecifier {
         override val kind: Kind = Kind.ChangeStepId
     }

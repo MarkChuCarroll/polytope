@@ -20,10 +20,11 @@ import com.mongodb.client.MongoDatabase
 import org.bson.types.ObjectId
 import org.goodmath.polytope.repository.Config
 import org.goodmath.polytope.repository.Repository
+import org.litote.kmongo.Id
 import java.time.Instant
 
 data class Project(
-    val id: ObjectId,
+    val _id: Id<Project>,
     val name: String,
     val creator: String,
     val timestamp: Instant,
@@ -32,11 +33,11 @@ data class Project(
 
 class Projects(val db: MongoDatabase, val repos: Repository) {
 
-    fun withAuth(a: AuthToken): AuthenticatedProjects {
+    fun withAuth(a: AuthenticatedUser): AuthenticatedProjects {
         return AuthenticatedProjects(a)
     }
 
-    class AuthenticatedProjects(val auth: AuthToken) {
+    class AuthenticatedProjects(val auth: AuthenticatedUser) {
         fun create(project: Project) {
             TODO()
         }
@@ -55,7 +56,7 @@ class Projects(val db: MongoDatabase, val repos: Repository) {
     }
 
     companion object {
-        fun initializeStorage(cfg: Config) {
+        fun initializeStorage(cfg: Config, db: MongoDatabase) {
 
         }
     }

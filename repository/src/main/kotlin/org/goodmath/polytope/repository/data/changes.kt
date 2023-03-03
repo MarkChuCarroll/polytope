@@ -18,33 +18,34 @@ package org.goodmath.polytope.repository.data
 import com.mongodb.client.MongoDatabase
 import org.goodmath.polytope.repository.Config
 import org.goodmath.polytope.repository.Repository
+import org.litote.kmongo.Id
 import java.time.Instant
 
 data class Change(
-    val id: ChangeId,
+    val _id: Id<Change>,
     val project: String,
     val name: String,
     val history: String,
     val basis: ProjectVersionSpecifier,
     val description: String,
     val timestamp: Instant,
-    val baseline: VersionId,
-    val steps: List<ChangeStepId>,
+    val baseline: Id<ArtifactVersion>,
+    val steps: List<Id<ChangeStep>>,
     val is_open: Boolean)
 
 data class ArtifactChange(
-    val stepId: ChangeStepId,
-    val versionIdBefore: VersionId?,
-    val versionIdAfter: VersionId?)
+    val id: Id<ChangeStep>,
+    val versionIdBefore: Id<ArtifactVersion>?,
+    val versionIdAfter: Id<ArtifactVersion>?)
 
 
 data class ChangeStep(
-    val id: ChangeStepId,
-    val changeId: ChangeId,
+    val _id: Id<ChangeStep>,
+    val changeId: Id<Change>,
     val creator: String,
     val description: String,
     val basis: ProjectVersionSpecifier,
-    val baselineVersion: VersionId,
+    val baselineVersion: Id<ArtifactVersion>,
     val artifactChanges: List<ArtifactChange>,
     val timestamp: Instant)
 
@@ -52,12 +53,12 @@ class Changes(val db: MongoDatabase, val repos: Repository) {
     val changes = db.getCollection("changes", Change::class.java)
     val steps = db.getCollection("changesteps", ChangeStep::class.java)
 
-    fun withAuth(auth: AuthToken): AuthenticatedChanges {
+    fun withAuth(auth: AuthenticatedUser): AuthenticatedChanges {
         return AuthenticatedChanges(auth)
     }
 
-    class AuthenticatedChanges(val auth: AuthToken) {
-        fun retrieveChange(id: ChangeId): Change {
+    class AuthenticatedChanges(val auth: AuthenticatedUser) {
+        fun retrieveChange(id: Id<Change>): Change {
             TODO()
         }
 
@@ -65,11 +66,11 @@ class Changes(val db: MongoDatabase, val repos: Repository) {
             TODO()
         }
 
-        fun close(project: String, change: ChangeId)  {
+        fun close(project: String, change: Id<Change>)  {
             TODO()
         }
 
-        fun isOpen(project: String, change: ChangeId): Boolean {
+        fun isOpen(project: String, change: Id<Change>): Boolean {
             TODO()
         }
 
@@ -77,17 +78,17 @@ class Changes(val db: MongoDatabase, val repos: Repository) {
             TODO()
         }
 
-        fun retrieveStep(project: String, stepId: ChangeStepId): ChangeStep {
+        fun retrieveStep(project: String, stepId: Id<ChangeStep>): ChangeStep {
             TODO()
         }
 
-        fun listSteps(project: String, changeId: ChangeId):List<ChangeStep> {
+        fun listSteps(project: String, changeId: Id<Change>):List<ChangeStep> {
             TODO()
         }
     }
 
     companion object {
-        fun initializeStorage(cfg: Config) {
+        fun initializeStorage(cfg: Config, db: MongoDatabase) {
 
         }
     }
