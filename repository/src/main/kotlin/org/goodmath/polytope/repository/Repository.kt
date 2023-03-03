@@ -18,6 +18,8 @@ package org.goodmath.polytope.repository
 import com.mongodb.client.MongoClients
 import com.mongodb.client.MongoDatabase
 import org.goodmath.polytope.repository.data.*
+import org.goodmath.polytope.repository.storage.SimpleFileStorage
+import java.nio.file.Path
 
 data class StorageConfig(
     val kind: String,
@@ -54,6 +56,7 @@ class Repository(val cfg: Config) {
     val changes = Changes(db, this)
     val histories = Histories(db, this)
     val projects = Projects(db, this)
+    val storage = SimpleFileStorage(Path.of(cfg.storage.location))
 
 
 }

@@ -43,6 +43,8 @@ dependencies {
     implementation("com.google.guava:guava:31.1-jre")
 
     implementation("org.litote.kmongo:kmongo:4.5.1")
+    implementation("io.mockk:mockk:1.13.4")
+
 }
 
 application {

@@ -6,6 +6,6 @@ data class PolytopeException(
     override val cause: Throwable? = null): Exception("Error($kind): $msg", cause) {
     enum class Kind {
         Internal, InvalidParameter, Permission,
-        NotFound, Conflict
+        NotFound, Conflict, Authentication
     }
 }

@@ -18,8 +18,10 @@ package org.goodmath.polytope.repository.data
 
 import com.mongodb.client.MongoDatabase
 import org.bson.types.ObjectId
+import org.goodmath.polytope.org.goodmath.polytope.PolytopeException
 import org.goodmath.polytope.repository.Config
 import org.goodmath.polytope.repository.Repository
+import org.litote.kmongo.*
 import java.time.Instant
 
 data class Artifact(
@@ -32,14 +34,20 @@ data class Artifact(
 )
 
 data class ArtifactVersion(
-    val id: VersionId,
+    val id: ObjectId,
+    val artifactId: ArtifactId,
     val artifactType: String,
     val timestamp: Instant,
     val creator: String,
     val contentId: ContentId,
+    val parents: List<VersionId>,
     val metadata: Map<String, String>,
-    val open: Boolean
-)
+    val status: Status
+) {
+    enum class Status {
+        Working, Committed, Aborted
+    }
+}
 
 class Artifacts(val db: MongoDatabase, val repos: Repository) {
     val artifactsCollection = db.getCollection("artifacts", Artifact::class.java)
@@ -60,64 +68,130 @@ class Artifacts(val db: MongoDatabase, val repos: Repository) {
     }
 
 
-    class AuthenticatedArtifacts(val auth: AuthToken) {
+    inner class AuthenticatedArtifacts(val auth: AuthToken) {
 
         /**
          * Retrieve an artifact from the database.
          * @param project the project containing the artifact.
          * @param id the artifact ID.
          * @return the full Artifact record.
-         * @throws PolytopeError if the artifact isn't found, if the user
+         * @throws PolytopeException if the artifact isn't found, if the user
          *    doesn't have permission to read it, or if there's some internal
          *    error retrieving it.
          */
         fun retrieveArtifact(project: String, id: ArtifactId): Artifact {
-            TODO()
+            return artifactsCollection.findOne(match(Artifact::id eq id.id))
+                ?: throw PolytopeException(PolytopeException.Kind.NotFound, "Artifact $id not found")
         }
 
         /**
          * Retrieve a version of an artifact from the database.
-         * @param project the project containing the artifact.
          * @param id the version ID.
          * @return the full ArtifactVersion record.
-         * @throws PolytopeError if the version isn't found, if the user
+         * @throws PolytopeException if the version isn't found, if the user
          *    doesn't have permission to read it, or if there's some internal
          *    error retrieving it.
          */
-        fun retrieveVersion(project: String, versionId: VersionId): ArtifactVersion {
-            TODO()
-        }
+        fun retrieveVersion(id: VersionId): ArtifactVersion {
+            return versionsCollection.findOne(match(ArtifactVersion::id eq id.versionId))
+                ?: throw PolytopeException(PolytopeException.Kind.NotFound, "Artifact Version $id not found")}
 
         /**
          * Store a new artifact from the database.
          * @param project the project containing the artifact.
          * @param artifact the new artifact to save.
-         * @throws PolytopeError if the artifact already exists, if the user
+         * @throws PolytopeException if the artifact already exists, if the user
          *    doesn't have permission to write it, or if there's some internal
          *    error storing it.
          */
         fun storeArtifact(artifact: Artifact) {
-            TODO()
+            artifactsCollection.save(artifact)
         }
 
-        fun createWorkingVersion(base_version: VersionId): ArtifactVersion {
-            TODO()
+        fun createWorkingVersion(project: String, base_version: VersionId): ArtifactVersion {
+            val base = retrieveVersion(base_version)
+            val working = ArtifactVersion(
+                id = ObjectId.get(),
+                artifactId = base.artifactId,
+                artifactType = base.artifactType,
+                contentId = base.contentId,
+                creator = auth.userId,
+                timestamp = Instant.now(),
+                metadata = base.metadata,
+                parents = listOf(VersionId(base.artifactId, base.id)),
+                status = ArtifactVersion.Status.Working)
+            versionsCollection.save(working)
+            return working
         }
 
-        fun updatWorkingVersion(version: ArtifactVersion): ArtifactVersion {
-            TODO()
+        fun updateWorkingVersion(version: ArtifactVersion): ArtifactVersion {
+            val now = Instant.now()
+            val newVersion = version.copy(timestamp = now)
+            val old = try {
+                retrieveVersion(VersionId(version.artifactId,
+                    version.id))
+            } catch (e: PolytopeException) {
+                if (e.kind == PolytopeException.Kind.NotFound) {
+                    throw PolytopeException(PolytopeException.Kind.NotFound,
+                        "Attempted to update a non-existent working version ")
+                } else {
+                    throw e
+                }
+            }
+
+            if (old.contentId != version.contentId) {
+                repos.storage.deleteTransientBlob(old.contentId)
+            }
+            versionsCollection.save(newVersion)
+            return newVersion
         }
 
         fun commitWorkingVersion(version: VersionId) {
-            TODO()
+            val now = Instant.now()
+            val version = try {
+                retrieveVersion(version)
+            } catch (e: PolytopeException) {
+                if (e.kind == PolytopeException.Kind.NotFound) {
+                    throw PolytopeException(PolytopeException.Kind.NotFound,
+                        "Attempted to commit a non-existent working version ")
+                } else {
+                    throw e
+                }
+            }
+            val content = repos.storage.retrieveBlob(version.contentId)
+            val permanentContentId = repos.storage.storeBlob(content)
+            versionsCollection.updateOne(
+                match(ArtifactVersion::id eq version.id),
+                set(
+                    ArtifactVersion::status setTo ArtifactVersion.Status.Committed,
+                    ArtifactVersion::contentId setTo permanentContentId,
+                    ArtifactVersion::timestamp setTo now
+                )
+            )
         }
 
         fun abortWorkingVersion(version: VersionId) {
-            TODO()
+            val now = Instant.now()
+            val version = try {
+                retrieveVersion(version)
+            } catch (e: PolytopeException) {
+                if (e.kind == PolytopeException.Kind.NotFound) {
+                    throw PolytopeException(PolytopeException.Kind.NotFound,
+                        "Attempted to abort a non-existent working version ")
+                } else {
+                    throw e
+                }
+            }
+            repos.storage.deleteTransientBlob(version.contentId)
+            versionsCollection.updateOne(match(ArtifactVersion::id eq version.id),
+                set(ArtifactVersion::status setTo ArtifactVersion.Status.Aborted,
+                    ArtifactVersion::timestamp setTo now))
+
         }
 
-        fun versionIsCommitted(version: VersionId): Boolean {
-            TODO()
+        fun versionStatus(version: VersionId): ArtifactVersion.Status {
+            val version = retrieveVersion(version)
+            return version.status
         }
     }
 
@@ -128,4 +202,4 @@ class Artifacts(val db: MongoDatabase, val repos: Repository) {
     }
 
 
-    }
+}
