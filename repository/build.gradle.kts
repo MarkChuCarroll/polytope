@@ -44,6 +44,10 @@ dependencies {
 
     implementation("org.litote.kmongo:kmongo:4.5.1")
     implementation("io.mockk:mockk:1.13.4")
+    implementation("io.maryk.rocksdb:rocksdb-multiplatform:7.3.1-1")
+    implementation("com.beust:klaxon:5.5")
+
+
 
 }
 

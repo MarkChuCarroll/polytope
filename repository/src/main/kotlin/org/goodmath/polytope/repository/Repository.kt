@@ -17,9 +17,15 @@ package org.goodmath.polytope.repository
 
 import com.mongodb.client.MongoClients
 import com.mongodb.client.MongoDatabase
+import maryk.rocksdb.RocksDB
+import maryk.rocksdb.openRocksDB
 import org.goodmath.polytope.repository.data.*
 import org.goodmath.polytope.repository.storage.SimpleFileStorage
+import org.rocksdb.ColumnFamilyDescriptor
+import org.rocksdb.ColumnFamilyHandle
 import java.nio.file.Path
+import kotlin.text.Charsets.UTF_8
+
 
 data class StorageConfig(
     val kind: String,
@@ -40,24 +46,48 @@ data class Config(
 
 class Repository(val cfg: Config) {
     companion object {
+        val families= listOf(
+            "users", "arifacts", "versions", "changes",
+            "steps", "histories", "historyVersions", "projects"
+        )
         fun initializeStorage(cfg: Config) {
-            val mongoClient = MongoClients.create(cfg.db.serverUrl)
-            val db = mongoClient.getDatabase(cfg.db.dbName)
+            //val mongoClient = MongoClients.create(cfg.db.serverUrl)
+            //val db = mongoClient.getDatabase(cfg.db.dbName)
+            val rocksDb = openRocksDB(cfg.db.dbName)
+            rocksDb.createColumnFamilies(families.map {
+                ColumnFamilyDescriptor(it.toByteArray(UTF_8))
+            })
+            rocksDb.close()
+            /*
             Users.initializeStorage(cfg, db)
             Artifacts.initializeStorage(cfg, db)
             Changes.initializeStorage(cfg, db)
             Histories.initializeStorage(cfg,db)
             Projects.initializeStorage(cfg, db)
-        }
+            */
+         }
     }
-    private val mongoClient = MongoClients.create(cfg.db.serverUrl)
-    private val db: MongoDatabase = mongoClient.getDatabase(cfg.db.dbName)
 
-    val users = Users(db, this)
-    val artifacts = Artifacts(db, this)
-    val changes = Changes(db, this)
-    val histories = Histories(db, this)
-    val projects = Projects(db, this)
+    val db: RocksDB
+    val cfHandles: Map<String, ColumnFamilyHandle>
+
+    init {
+        val handles: MutableList<ColumnFamilyHandle> = mutableListOf()
+        val descriptors = families.map { ColumnFamilyDescriptor(it.toByteArray(UTF_8)) }
+        db = openRocksDB(cfg.db.dbName, descriptors, handles)
+        cfHandles = handles.associateBy { h -> h.name.toString(UTF_8) }
+
+    }
+
+    val users = Users(db, cfHandles["users"]!!, this)
+    val artifacts = Artifacts(db, cfHandles["artifacts"]!!,
+        cfHandles["versions"]!!, this)
+    val changes = Changes(db, cfHandles["changes"]!!,
+        cfHandles["steps"]!!, this)
+    val histories = Histories(db, cfHandles["histories"]!!,
+        cfHandles["historyVersions"]!!, this)
+    val projects = Projects(db, cfHandles["projects"]!!, this)
+
     val storage = SimpleFileStorage(Path.of(cfg.storage.location))
 
 

@@ -15,14 +15,15 @@
  */
 package org.goodmath.polytope.repository.data
 
-import com.mongodb.client.MongoDatabase
+import maryk.rocksdb.ColumnFamilyHandle
+import maryk.rocksdb.RocksDB
 import java.time.Instant
 import org.goodmath.polytope.repository.Config
 import org.goodmath.polytope.repository.Repository
-import org.litote.kmongo.Id
+import org.goodmath.polytope.repository.util.Id
 
 data class History(
-    val _id: Id<History>,
+    val id: Id<History>,
     val name: String,
     val description: String,
     val timestamp: Instant,
@@ -40,9 +41,10 @@ data class HistoryVersion(
 )
 
 
-class Histories(val db: MongoDatabase, val repos: Repository) {
-    val histories = db.getCollection("histories", History::class.java)
-    val historyVersions = db.getCollection("historyversions", HistoryVersion::class.java)
+class Histories(val db: RocksDB,
+    val historiesColumn: ColumnFamilyHandle,
+    val historyVersionsColumn: ColumnFamilyHandle,
+    val repos: Repository) {
 
     fun withAuth(auth: AuthenticatedUser) : AuthenticatedHistoriesDatastore {
         return AuthenticatedHistoriesDatastore(auth)
@@ -80,13 +82,6 @@ class Histories(val db: MongoDatabase, val repos: Repository) {
 
         fun list(project: String): List<History> {
             TODO()
-        }
-    }
-
-
-    companion object {
-        fun initializeStorage(cfg: Config, db: MongoDatabase) {
-
         }
     }
 

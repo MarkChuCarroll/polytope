@@ -4,6 +4,8 @@ import com.mongodb.client.MongoCollection
 import com.mongodb.client.MongoDatabase
 import io.mockk.every
 import io.mockk.mockk
+import maryk.rocksdb.ColumnFamilyHandle
+import maryk.rocksdb.RocksDB
 import org.goodmath.polytope.repository.Repository
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -11,11 +13,10 @@ import org.junit.jupiter.api.Test
 class PermissionTest {
     @Test
     fun testValidateSingleReadPermission() {
-        val db = mockk<MongoDatabase>()
-        val col = mockk<MongoCollection<User>>()
-        every { db invoke "getCollection" withArguments listOf("users", User::class.java) } returns col
+        val db = mockk<RocksDB>()
+        val cf = mockk<ColumnFamilyHandle>()
         val repo = mockk<Repository>()
-        val users = Users(db, repo)
+        val users = Users(db, cf, repo)
         val perm = Permission.fromString("project(Read:foo)")!!
         val auth = AuthenticatedUser("markcc", listOf(perm))
         assertTrue(users.permits(auth, Action.Read, "foo"))
@@ -26,11 +27,10 @@ class PermissionTest {
 
     @Test
     fun testValidateSingleWritePermission() {
-        val db = mockk<MongoDatabase>()
-        val col = mockk<MongoCollection<User>>()
-        every { db invoke "getCollection" withArguments listOf("users", User::class.java) } returns col
+        val db = mockk<RocksDB>()
+        val cf = mockk<ColumnFamilyHandle>()
         val repo = mockk<Repository>()
-        val users = Users(db, repo)
+        val users = Users(db, cf, repo)
         val perm = Permission.fromString("project(Write:foo)")!!
         val auth = AuthenticatedUser("markcc", listOf(perm))
         assertTrue(users.permits(auth, Action.Read, "foo"))
@@ -41,11 +41,10 @@ class PermissionTest {
 
     @Test
     fun testValidateSingleAdminPermission() {
-        val db = mockk<MongoDatabase>()
-        val col = mockk<MongoCollection<User>>()
-        every { db invoke "getCollection" withArguments listOf("users", User::class.java) } returns col
+        val db = mockk<RocksDB>()
+        val cf = mockk<ColumnFamilyHandle>()
         val repo = mockk<Repository>()
-        val users = Users(db, repo)
+        val users = Users(db, cf, repo)
         val perm = Permission.fromString("project(Admin:foo)")!!
 
         val auth = AuthenticatedUser("markcc", listOf(perm))
@@ -57,11 +56,10 @@ class PermissionTest {
 
     @Test
     fun testValidateMultiplePermissions() {
-        val db = mockk<MongoDatabase>()
-        val col = mockk<MongoCollection<User>>()
-        every { db invoke "getCollection" withArguments listOf("users", User::class.java) } returns col
+        val db = mockk<RocksDB>()
+        val cf = mockk<ColumnFamilyHandle>()
         val repo = mockk<Repository>()
-        val users = Users(db, repo)
+        val users = Users(db, cf, repo)
         val perms = listOf(
             Permission.fromString("project(Admin:foo)")!!,
             Permission.fromString("project(Read:bar)")!!,
@@ -79,11 +77,10 @@ class PermissionTest {
 
     @Test
     fun testValidateAdminUniversePermission() {
-        val db = mockk<MongoDatabase>()
-        val col = mockk<MongoCollection<User>>()
-        every { db invoke "getCollection" withArguments listOf("users", User::class.java) } returns col
+        val db = mockk<RocksDB>()
+        val cf = mockk<ColumnFamilyHandle>()
         val repo = mockk<Repository>()
-        val users = Users(db, repo)
+        val users = Users(db, cf, repo)
         val perms = listOf(
             Permission.fromString("project(Read:foo)")!!,
             Permission.fromString("global(Admin)")!!)

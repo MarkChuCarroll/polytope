@@ -16,3 +16,107 @@
 
 package org.goodmath.polytope.workspace
 
+import com.mongodb.client.MongoDatabase
+import org.goodmath.polytope.repository.Repository
+import org.goodmath.polytope.repository.data.*
+import org.litote.kmongo.Id
+import java.time.Instant
+
+data class WorkspaceDescriptor(
+    val project: String,
+    val wsName: String,
+    val id: Id<Workspace>,
+    val creator: String,
+    val baselineId: Id<Artifact>
+)
+
+data class MergeConflict(
+    val id: Id<MergeConflict>
+)
+
+data class WorkspaceFile(
+    val path: String,
+    val artifactId: Id<Artifact>,
+    val versionId: Id<ArtifactVersion>,
+    val type: String,
+    val lastModified: Instant,
+    val metadata: Map<String, String>,
+    val content: ByteArray
+)
+class Workspace(
+    val auth: AuthenticatedUser,
+    val ws: WorkspaceDescriptor,
+    val repos: Repository,
+    val db: MongoDatabase) {
+
+    fun isDirty(): Boolean {
+        TODO()
+    }
+
+    fun populate(fromVersion: ProjectVersionSpecifier) {
+        TODO()
+    }
+
+    fun getWorkspaceFile(path: String): WorkspaceFile? {
+        TODO()
+    }
+
+    fun getDirtyVersion(path: String): Pair<Id<Artifact>, Id<ArtifactVersion>>? {
+        TODO()
+    }
+
+    fun addNewFile(path: String, type: String, content: ByteArray, metadata: Map<String, String>): Id<Artifact> {
+        TODO()
+    }
+
+    fun deleteFile(path: String) {
+        TODO()
+    }
+
+    fun moveFile(pathBefore: String, pathAfter: String) {
+        TODO()
+    }
+
+    fun modifyFile(path: String,
+                   content: ByteArray,
+                   metadata: Map<String, String>) {
+
+    }
+
+    fun updateFromHistory(newBasis: ProjectVersionSpecifier): List<MergeConflict> {
+        TODO()
+    }
+
+    fun saveChangestep(
+        description: String,
+        resolvedConflicts: List<Id<MergeConflict>>): Id<ChangeStep> {
+        TODO()
+    }
+
+    fun startChange(changeName: String,
+                    description: String,
+                    basis: ProjectVersionSpecifier) {
+        TODO()
+    }
+
+    fun deliverChange(toHistory: String) {
+        TODO()
+    }
+
+    fun abortChange() {
+        TODO()
+    }
+
+    fun pathForArtifact(id: Id<Artifact>): String? {
+        TODO()
+    }
+
+    fun artifactForPath(path: String): Id<Artifact>? {
+        TODO()
+    }
+
+
+
+
+
+}

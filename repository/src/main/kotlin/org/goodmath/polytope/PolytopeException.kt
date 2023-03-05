@@ -1,4 +1,4 @@
-package org.goodmath.polytope.org.goodmath.polytope
+package org.goodmath.polytope
 
 data class PolytopeException(
     val kind: Kind,

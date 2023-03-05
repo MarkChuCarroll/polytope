@@ -16,7 +16,7 @@
 
 package org.goodmath.polytope.repository.data
 
-import org.goodmath.polytope.org.goodmath.polytope.PolytopeException
+import org.goodmath.polytope.PolytopeException
 
 
 enum class Action {
@@ -85,7 +85,8 @@ sealed interface Permission {
                     "global" -> GlobalPermission(action)
                     "repos" -> RepositoryPermission(action)
                     "project" -> ProjectPermission(target.substring(1), action)
-                    else -> throw PolytopeException(PolytopeException.Kind.InvalidParameter,
+                    else -> throw PolytopeException(
+                        PolytopeException.Kind.InvalidParameter,
                         "Invalid permission string $perm")
                 }
             }

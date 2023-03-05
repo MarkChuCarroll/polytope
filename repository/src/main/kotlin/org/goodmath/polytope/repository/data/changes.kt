@@ -15,14 +15,16 @@
  */
 package org.goodmath.polytope.repository.data
 
-import com.mongodb.client.MongoDatabase
-import org.goodmath.polytope.repository.Config
+import maryk.rocksdb.ColumnFamilyHandle
+import maryk.rocksdb.RocksDB
+import org.goodmath.polytope.PolytopeException
 import org.goodmath.polytope.repository.Repository
-import org.litote.kmongo.Id
+import org.goodmath.polytope.repository.util.*
 import java.time.Instant
+import kotlin.text.Charsets.UTF_8
 
 data class Change(
-    val _id: Id<Change>,
+    val id: Id<Change>,
     val project: String,
     val name: String,
     val history: String,
@@ -31,7 +33,7 @@ data class Change(
     val timestamp: Instant,
     val baseline: Id<ArtifactVersion>,
     val steps: List<Id<ChangeStep>>,
-    val is_open: Boolean)
+    val isOpen: Boolean)
 
 data class ArtifactChange(
     val id: Id<ChangeStep>,
@@ -40,7 +42,7 @@ data class ArtifactChange(
 
 
 data class ChangeStep(
-    val _id: Id<ChangeStep>,
+    val id: Id<ChangeStep>,
     val changeId: Id<Change>,
     val creator: String,
     val description: String,
@@ -49,47 +51,66 @@ data class ChangeStep(
     val artifactChanges: List<ArtifactChange>,
     val timestamp: Instant)
 
-class Changes(val db: MongoDatabase, val repos: Repository) {
-    val changes = db.getCollection("changes", Change::class.java)
-    val steps = db.getCollection("changesteps", ChangeStep::class.java)
+class Changes(val db: RocksDB, val changesColumn: ColumnFamilyHandle,
+              val stepsColumn: ColumnFamilyHandle,
+              val repos: Repository) {
 
     fun withAuth(auth: AuthenticatedUser): AuthenticatedChanges {
         return AuthenticatedChanges(auth)
     }
 
-    class AuthenticatedChanges(val auth: AuthenticatedUser) {
-        fun retrieveChange(id: Id<Change>): Change {
-            TODO()
+    inner class AuthenticatedChanges(val auth: AuthenticatedUser) {
+        fun retrieveChange(project: String, id: Id<Change>): Change {
+            repos.users.validatePermissions(auth, Action.Read, project)
+            val c = db.getTyped<Change>(changesColumn, id) ?:
+                throw PolytopeException(PolytopeException.Kind.NotFound,
+                    "Change $id not found")
+            if (c.project != project) {
+                throw PolytopeException(PolytopeException.Kind.InvalidParameter,
+                    "Change $id doesn't belong to project $project")
+            }
+            return c
         }
 
         fun saveChange(change: Change) {
-            TODO()
+            repos.users.validatePermissions(auth, Action.Write, change.project)
+            db.putTyped(changesColumn, change.id, change)
         }
 
-        fun close(project: String, change: Id<Change>)  {
-            TODO()
+        fun close(project: String, changeId: Id<Change>)  {
+            repos.users.validatePermissions(auth, Action.Write, project)
+            val change = retrieveChange(project, changeId)
+            db.putTyped(changesColumn, changeId, change)
         }
 
-        fun isOpen(project: String, change: Id<Change>): Boolean {
-            TODO()
+        fun isOpen(project: String, changeId: Id<Change>): Boolean {
+            repos.users.validatePermissions(auth, Action.Write, project)
+            val change = retrieveChange(project, changeId)
+            return change.isOpen
         }
 
         fun saveChangestep(project: String, step: ChangeStep) {
-            TODO()
+            repos.users.validatePermissions(auth, Action.Write, project)
+            db.putTyped(stepsColumn, step.id, step)
         }
 
         fun retrieveStep(project: String, stepId: Id<ChangeStep>): ChangeStep {
-            TODO()
+            repos.users.validatePermissions(auth, Action.Read, project)
+            return db.getTyped<ChangeStep>(stepsColumn, stepId)
+                ?: throw PolytopeException(PolytopeException.Kind.NotFound,
+                    "Change step not found")
         }
 
         fun listSteps(project: String, changeId: Id<Change>):List<ChangeStep> {
-            TODO()
+            repos.users.validatePermissions(auth, Action.Read, project)
+            return db.list(stepsColumn) { it.changeId == changeId  }
         }
-    }
 
-    companion object {
-        fun initializeStorage(cfg: Config, db: MongoDatabase) {
-
+        fun listChanges(project: String, historyName: String):List<Change> {
+            repos.users.validatePermissions(auth, Action.Read, project)
+            return db.list(changesColumn) {
+                it.history == historyName
+            }
         }
     }
 }

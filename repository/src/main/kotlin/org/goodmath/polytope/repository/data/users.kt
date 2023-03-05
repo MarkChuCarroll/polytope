@@ -16,16 +16,14 @@
 
 package org.goodmath.polytope.repository.data
 
-import com.mongodb.client.MongoDatabase
-import org.goodmath.polytope.org.goodmath.polytope.PolytopeException
-import org.goodmath.polytope.repository.Config
+import maryk.rocksdb.RocksDB
+import org.goodmath.polytope.PolytopeException
 import org.goodmath.polytope.repository.Repository
-import org.litote.kmongo.*
+import org.goodmath.polytope.repository.util.*
+import org.rocksdb.ColumnFamilyHandle
 import java.security.MessageDigest
 import java.time.Instant
 import kotlin.text.Charsets.UTF_8
-
-
 
 
 // This is garbage.
@@ -38,7 +36,6 @@ data class AuthenticatedUser(val userId: String,
 
 
 data class User(
-    val id: Id<User>,
     val username: String,
     val fullName: String,
     val permissions: List<Permission>,
@@ -48,8 +45,7 @@ data class User(
     val active: Boolean
 )
 
-class Users(db: MongoDatabase, repos: Repository) {
-    val users = db.getCollection(USERS_COLL, User::class.java)
+class Users(val db: RocksDB, val usersColumn: ColumnFamilyHandle, val repos: Repository) {
 
     fun permits(auth: AuthenticatedUser, action: Action, project: String?): Boolean {
         return auth.permissions.any {
@@ -63,7 +59,8 @@ class Users(db: MongoDatabase, repos: Repository) {
 
     fun validatePermissions(auth: AuthenticatedUser, action: Action, project: String?) {
         if (!permits(auth, action, project)) {
-            throw PolytopeException(PolytopeException.Kind.Permission,
+            throw PolytopeException(
+                PolytopeException.Kind.Permission,
                 "User permission denied")
         }
      }
@@ -81,8 +78,9 @@ class Users(db: MongoDatabase, repos: Repository) {
 
     fun authenticate(username: String,
                      password: String): AuthenticatedUser {
-        val user = users.findOne { match(User::username eq username) }
-            ?: throw PolytopeException(PolytopeException.Kind.NotFound,
+        val user = db.getTyped<User>(usersColumn, username)
+            ?: throw PolytopeException(
+                PolytopeException.Kind.NotFound,
                 "User ${username} not found")
         val hashedFromUser = saltedHash(username, password)
         if (hashedFromUser != user.password) {
@@ -91,8 +89,6 @@ class Users(db: MongoDatabase, repos: Repository) {
                 "Authentication failed")
         }
         return AuthenticatedUser(username, user.permissions)
-
-
     }
 
     fun withAuth(a: AuthenticatedUser): AuthenticatedUsers {
@@ -102,28 +98,46 @@ class Users(db: MongoDatabase, repos: Repository) {
     inner class AuthenticatedUsers(val auth: AuthenticatedUser) {
         fun retrieveUser(username: String): User {
             validatePermissions(auth, Action.Admin, null)
-            val result = users.findOne(match(User::username eq username))
-                ?: throw PolytopeException(PolytopeException.Kind.NotFound,
+            val result = db.getTyped<User>(usersColumn, username)
+                ?: throw PolytopeException(
+                    PolytopeException.Kind.NotFound,
                     "User $username not found")
             return result.copy(password="<redacted>")
         }
 
-        fun create(user: User): User {
+        fun create(userName: String,
+                   fullName: String,
+                   email: String,
+                   permissions: List<Permission>,
+                   password: String): User {
             validatePermissions(auth, Action.Admin, null)
-            if (exists(user.username)) {
-                throw PolytopeException(PolytopeException.Kind.InvalidParameter,
-                    "User with username '${user.username} already exists")
+
+            if (exists(userName)) {
+                throw PolytopeException(
+                    PolytopeException.Kind.InvalidParameter,
+                    "User with username '${userName} already exists")
             }
-            val encodedPassword = saltedHash(user.username,
-                user.password)
-            val saltedUser = user.copy(password = encodedPassword)
-            users.save(saltedUser)
+
+            val encodedPassword = saltedHash(userName,
+                password)
+
+            val user = User(
+                userName,
+                fullName,
+                permissions,
+                email,
+                encodedPassword,
+                Instant.now(),
+                true)
+
+            db.putTyped(usersColumn, user.username, user)
             return user.copy(password = "<redacted>")
         }
 
         fun exists(username: String): Boolean {
             validatePermissions(auth, Action.Admin, null)
-            val u = users.findOne(match(User::username eq username))
+
+            val u = db.getTyped<User>(username)
             return u == null
         }
 
@@ -131,30 +145,19 @@ class Users(db: MongoDatabase, repos: Repository) {
             validatePermissions(auth, Action.Admin, null)
             val u = retrieveUser(username)
             val newPermissions = (u.permissions + perms).distinct()
-            users.save(u.copy(permissions = newPermissions))
+            db.putTyped(username, u.copy(permissions = newPermissions))
         }
 
         fun revokePermission(username: String, perms: List<Permission>) {
             validatePermissions(auth, Action.Admin, null)
             val u = retrieveUser(username)
             val newPermissions = u.permissions - perms
-            users.save(u.copy(permissions = newPermissions))
+            db.putTyped(username, u.copy(permissions = newPermissions))
         }
 
         fun list(): List<User> {
             validatePermissions(auth, Action.Admin, null)
-            return users.find().toList().map { it.copy(password="<redacted>") }
-        }
-
-    }
-
-    companion object {
-
-        val USERS_COLL = "users"
-        fun initializeStorage(cfg: Config, db: MongoDatabase) {
-            // Make sure the collection exists.
-            val users = db.getCollection(USERS_COLL, User::class.java)
-            users.createIndex(ascendingIndex(User::username))
+            return db.list<User>(usersColumn)
         }
     }
 

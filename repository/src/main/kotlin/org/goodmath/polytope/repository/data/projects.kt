@@ -16,48 +16,65 @@
 
 package org.goodmath.polytope.repository.data
 
-import com.mongodb.client.MongoDatabase
-import org.bson.types.ObjectId
-import org.goodmath.polytope.repository.Config
+import maryk.rocksdb.ColumnFamilyHandle
+import maryk.rocksdb.RocksDB
+import org.goodmath.polytope.PolytopeException
 import org.goodmath.polytope.repository.Repository
-import org.litote.kmongo.Id
+import org.goodmath.polytope.repository.util.*
 import java.time.Instant
+import kotlin.text.Charsets.UTF_8
 
 data class Project(
-    val _id: Id<Project>,
     val name: String,
     val creator: String,
     val timestamp: Instant,
     val description: String
 )
 
-class Projects(val db: MongoDatabase, val repos: Repository) {
+class Projects(val db: RocksDB,
+               val projectsColumn: ColumnFamilyHandle,
+               val repos: Repository) {
 
     fun withAuth(a: AuthenticatedUser): AuthenticatedProjects {
         return AuthenticatedProjects(a)
     }
 
-    class AuthenticatedProjects(val auth: AuthenticatedUser) {
-        fun create(project: Project) {
-            TODO()
+    inner class AuthenticatedProjects(val auth: AuthenticatedUser) {
+        fun create(projectName: String, description: String): Project {
+            val project = Project(
+                projectName,
+                auth.userId,
+                Instant.now(),
+                description)
+            db.putTyped(projectsColumn, projectName, project)
+            return project
         }
 
         fun retrieveProject(name: String): Project {
-            TODO()
+            repos.users.validatePermissions(auth, Action.Read, name)
+            return db.getTyped<Project>(projectsColumn, name) ?:
+                   throw PolytopeException(PolytopeException.Kind.NotFound,
+                        "Project '$name' not found")
         }
 
-        fun update(project: Project) {
-            TODO()
+        fun update(name: String, project: Project) {
+            repos.users.validatePermissions(auth, Action.Write, name)
+            if (name != project.name) {
+                throw PolytopeException(PolytopeException.Kind.InvalidParameter,
+                    "Project name must match project being saved")
+            }
+            db.putTyped(projectsColumn, name, project)
         }
 
         fun list(): List<Project> {
-            TODO()
+            repos.users.validatePermissions(auth, Action.Read, null)
+            return db.list(projectsColumn)
         }
-    }
 
-    companion object {
-        fun initializeStorage(cfg: Config, db: MongoDatabase) {
-
+        fun exists(projectName: String): Boolean {
+            val p = db.getTyped<Project>(projectsColumn, projectName)
+            return p == null
         }
+
     }
 }

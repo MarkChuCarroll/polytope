@@ -1,6 +1,6 @@
 package org.goodmath.polytope.repository.storage
 
-import org.goodmath.polytope.org.goodmath.polytope.PolytopeException
+import org.goodmath.polytope.PolytopeException
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.file.Path
@@ -47,7 +47,8 @@ class SimpleFileStorage(val baseDir: Path): Storage {
         val transDir = baseDir / "transient"
         if (!transDir.toFile().exists()) {
             if (!(baseDir / "transient").toFile().mkdir()) {
-                throw PolytopeException(PolytopeException.Kind.Internal,
+                throw PolytopeException(
+                    PolytopeException.Kind.Internal,
                     "Unable to create transient storage")
             }
         }
@@ -67,7 +68,8 @@ class SimpleFileStorage(val baseDir: Path): Storage {
         val path = when(id.category) {
             "transient" -> baseDir / "transient" / id.id.toString()
             "permanent" -> baseDir / "perm" / id.id.toString()
-            else -> throw PolytopeException(PolytopeException.Kind.InvalidParameter,
+            else -> throw PolytopeException(
+                PolytopeException.Kind.InvalidParameter,
                 "Invalid storage category ${id.category}")
         }
         return FileInputStream(path.toFile()).use { i ->

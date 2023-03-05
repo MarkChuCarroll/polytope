@@ -16,19 +16,24 @@
 
 package org.goodmath.polytope.repository.data
 
-import com.mongodb.client.MongoDatabase
-import org.goodmath.polytope.org.goodmath.polytope.PolytopeException
-import org.goodmath.polytope.repository.Config
+import maryk.rocksdb.ColumnFamilyHandle
+import maryk.rocksdb.RocksDB
+import org.goodmath.polytope.PolytopeException
 import org.goodmath.polytope.repository.Repository
 import org.goodmath.polytope.repository.storage.ContentId
-import org.litote.kmongo.*
+import org.goodmath.polytope.repository.util.Id
+import org.goodmath.polytope.repository.util.getTyped
+import org.goodmath.polytope.repository.util.newId
+import org.goodmath.polytope.repository.util.putTyped
 import java.time.Instant
+import java.util.*
+
 
 /**
  * The record for an artifact in the repository.
  */
 data class Artifact(
-    val _id: Id<Artifact>,
+    val id: Id<Artifact>,
     val artifactType: String,
     val timestamp: Instant,
     val creator: String,
@@ -37,7 +42,7 @@ data class Artifact(
 )
 
 data class ArtifactVersion(
-    val _id: Id<ArtifactVersion>,
+    val id: Id<ArtifactVersion>,
     val artifactId: Id<Artifact>,
     val artifactType: String,
     val timestamp: Instant,
@@ -52,9 +57,10 @@ data class ArtifactVersion(
     }
 }
 
-class Artifacts(db: MongoDatabase, val repos: Repository) {
-    val artifactsCollection = db.getCollection("artifacts", Artifact::class.java)
-    val versionsCollection = db.getCollection("versions", ArtifactVersion::class.java)
+class Artifacts(val db: RocksDB,
+                val artifactsColumn: ColumnFamilyHandle,
+                val versionsColumn: ColumnFamilyHandle,
+                val repos: Repository) {
 
     /**
      * Get an API that can be used to store and retrieve
@@ -84,7 +90,7 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
          */
         fun retrieveArtifact(project: String, id: Id<Artifact>): Artifact {
             repos.users.validatePermissions(auth, Action.Read, project)
-            return artifactsCollection.findOne(match(Artifact::_id eq id))
+            return db.getTyped<Artifact>(artifactsColumn, id)
                 ?: throw PolytopeException(PolytopeException.Kind.NotFound, "Artifact $id not found")
         }
 
@@ -102,7 +108,7 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
                             versionId: Id<ArtifactVersion>): ArtifactVersion {
             // TODO: validate that the version belongs to an artifact in the project.
             repos.users.validatePermissions(auth, Action.Read, project)
-            return versionsCollection.findOne(match(ArtifactVersion::_id eq versionId))
+            return db.getTyped<ArtifactVersion>(versionsColumn, versionId)
                 ?: throw PolytopeException(PolytopeException.Kind.NotFound, "Artifact Version $versionId not found")
         }
 
@@ -115,19 +121,42 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
          *    doesn't have permission to write it, or if there's some internal
          *    error storing it.
          */
-        fun storeArtifact(project: String, artifact: Artifact, initialVersion: ArtifactVersion) {
+        fun createArtifact(project: String,
+                           artifactType: String,
+                           metadata: Map<String, String>): Artifact {
             repos.users.validatePermissions(auth, Action.Write, project)
-            if (project != artifact.project) {
-                throw PolytopeException(PolytopeException.Kind.InvalidParameter,
-                    "Artifact must be part of the specified project")
-            }
-            if (artifact._id != initialVersion.artifactId) {
-                throw PolytopeException(PolytopeException.Kind.InvalidParameter,
-                    "Initial version must be for the new artifact")
-            }
-            artifactsCollection.save(artifact)
-            versionsCollection.save(initialVersion)
+            val artifact = Artifact(
+                id = newId<Artifact>("art" ),
+                artifactType = artifactType,
+                Instant.now(),
+                auth.userId,
+                project,
+                metadata)
+            db.putTyped(artifactsColumn, artifact.id, artifact)
+            return artifact
         }
+
+        fun createVersion(project: String,
+                          artifactId: Id<Artifact>,
+                          artifactType: String,
+                          contentId: ContentId,
+                          parents: List<Id<ArtifactVersion>>,
+                          metadata: Map<String, String>): ArtifactVersion {
+            repos.users.validatePermissions(auth, Action.Write, project)
+            val ver = ArtifactVersion(
+                id = newId<ArtifactVersion>("ver"),
+                artifactId = artifactId,
+                creator = auth.userId,
+                contentId = contentId,
+                timestamp = Instant.now(),
+                parents = parents,
+                metadata = metadata,
+                artifactType = artifactType,
+                status = ArtifactVersion.Status.Committed)
+            db.putTyped(versionsColumn, ver.id, ver)
+            return ver
+        }
+
 
         /**
          * Create a working version of an artifact for an in-progress change.
@@ -142,16 +171,16 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
             repos.users.validatePermissions(auth, Action.Write, project)
             val base = retrieveVersion(project, artifactId, baseVersion)
             val working = ArtifactVersion(
-                _id = newId<ArtifactVersion>(),
+                id = newId<ArtifactVersion>("artifact"),
                 artifactId = base.artifactId,
                 artifactType = base.artifactType,
                 contentId = base.contentId,
                 creator = auth.userId,
                 timestamp = Instant.now(),
                 metadata = base.metadata,
-                parents = listOf(base._id),
+                parents = listOf(base.id),
                 status = ArtifactVersion.Status.Working)
-            versionsCollection.save(working)
+            db.putTyped(versionsColumn, working.id, working)
             return working
         }
 
@@ -168,10 +197,11 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
             val newVersion = version.copy(timestamp = now)
             val old = try {
                 retrieveVersion(project, version.artifactId,
-                    version._id)
+                    version.id)
             } catch (e: PolytopeException) {
                 if (e.kind == PolytopeException.Kind.NotFound) {
-                    throw PolytopeException(PolytopeException.Kind.NotFound,
+                    throw PolytopeException(
+                        PolytopeException.Kind.NotFound,
                         "Attempted to update a non-existent working version ")
                 } else {
                     throw e
@@ -181,7 +211,7 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
             if (old.contentId != version.contentId) {
                 repos.storage.deleteTransientBlob(old.contentId)
             }
-            versionsCollection.save(newVersion)
+            db.putTyped(versionsColumn, newVersion.id, newVersion)
             return newVersion
         }
 
@@ -199,7 +229,8 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
                 retrieveVersion(project,  artifactId, versionId)
             } catch (e: PolytopeException) {
                 if (e.kind == PolytopeException.Kind.NotFound) {
-                    throw PolytopeException(PolytopeException.Kind.NotFound,
+                    throw PolytopeException(
+                        PolytopeException.Kind.NotFound,
                         "Attempted to commit a non-existent working version ")
                 } else {
                     throw e
@@ -207,14 +238,11 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
             }
             val content = repos.storage.retrieveBlob(version.contentId)
             val permanentContentId = repos.storage.storeBlob(content)
-            versionsCollection.updateOne(
-                match(ArtifactVersion::_id eq version._id),
-                set(
-                    ArtifactVersion::status setTo ArtifactVersion.Status.Committed,
-                    ArtifactVersion::contentId setTo permanentContentId,
-                    ArtifactVersion::timestamp setTo now
-                )
-            )
+            db.putTyped(versionsColumn, version.id, version.copy(
+                status = ArtifactVersion.Status.Committed,
+                contentId = permanentContentId,
+                timestamp = now
+            ))
         }
 
         /**
@@ -231,16 +259,19 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
                 retrieveVersion(project, artifactId, versionId)
             } catch (e: PolytopeException) {
                 if (e.kind == PolytopeException.Kind.NotFound) {
-                    throw PolytopeException(PolytopeException.Kind.NotFound,
+                    throw PolytopeException(
+                        PolytopeException.Kind.NotFound,
                         "Attempted to abort a non-existent working version ")
                 } else {
                     throw e
                 }
             }
             repos.storage.deleteTransientBlob(version.contentId)
-            versionsCollection.updateOne(match(ArtifactVersion::_id eq version._id),
-                set(ArtifactVersion::status setTo ArtifactVersion.Status.Aborted,
-                    ArtifactVersion::timestamp setTo now))
+            db.putTyped(versionsColumn, version.id,
+                version.copy(
+                    status = ArtifactVersion.Status.Aborted,
+                    timestamp = now
+                ))
 
         }
 
@@ -255,12 +286,4 @@ class Artifacts(db: MongoDatabase, val repos: Repository) {
         }
     }
 
-    companion object {
-        const val ARTIFACTS_COLLECTION = "artifacts"
-        const val VERSIONS_COLLECTION = "artifact_versions"
-        fun initializeStorage(cfg: Config, db: MongoDatabase) {
-            val artifacts = db.getCollection(ARTIFACTS_COLLECTION)
-            val versions = db.getCollection(VERSIONS_COLLECTION)
-        }
-    }
 }
