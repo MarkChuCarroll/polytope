@@ -19,6 +19,10 @@ import com.mongodb.client.MongoClients
 import com.mongodb.client.MongoDatabase
 import maryk.rocksdb.RocksDB
 import maryk.rocksdb.openRocksDB
+import org.goodmath.polytope.repository.agents.Agent
+import org.goodmath.polytope.repository.agents.BaselineAgent
+import org.goodmath.polytope.repository.agents.DirectoryAgent
+import org.goodmath.polytope.repository.agents.text.TextAgent
 import org.goodmath.polytope.repository.data.*
 import org.goodmath.polytope.repository.storage.SimpleFileStorage
 import org.rocksdb.ColumnFamilyDescriptor
@@ -70,6 +74,7 @@ class Repository(val cfg: Config) {
 
     val db: RocksDB
     val cfHandles: Map<String, ColumnFamilyHandle>
+    val agents = listOf(DirectoryAgent, TextAgent, BaselineAgent)
 
     init {
         val handles: MutableList<ColumnFamilyHandle> = mutableListOf()

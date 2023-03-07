@@ -109,7 +109,7 @@ data class DirectoryMergeConflict(
 /**
  * The agent for working with directory artifacts.
  */
-class DirectoryAgent() : Agent<Directory> {
+object DirectoryAgent : Agent<Directory> {
     override val artifactType: String = "directory"
     override fun fromBytes(content: ByteArray): Directory {
         return ParsingCommons.klaxon.parse<Directory>(content)
