@@ -48,10 +48,9 @@ class Histories(val db: RocksDB,
 
     fun withAuth(auth: AuthenticatedUser) : AuthenticatedHistoriesDatastore {
         return AuthenticatedHistoriesDatastore(auth)
-
     }
 
-    class AuthenticatedHistoriesDatastore(val auth: AuthenticatedUser) {
+    inner class AuthenticatedHistoriesDatastore(val auth: AuthenticatedUser) {
         fun retrieveHistory(project: String, history: String): History {
             TODO()
 

@@ -28,7 +28,9 @@ data class Project(
     val name: String,
     val creator: String,
     val timestamp: Instant,
-    val description: String
+    val description: String,
+    val rootDir: Id<Artifact>,
+    val baseline: Id<Artifact>
 )
 
 class Projects(val db: RocksDB,
@@ -40,15 +42,24 @@ class Projects(val db: RocksDB,
     }
 
     inner class AuthenticatedProjects(val auth: AuthenticatedUser) {
+
+        fun resolveProjectVersionSpecifier(pvs: ProjectVersionSpecifier): Id<ArtifactVersion> {
+            TODO()
+        }
+
         fun create(projectName: String, description: String): Project {
-            val project = Project(
+/*            val project = Project(
                 projectName,
                 auth.userId,
                 Instant.now(),
-                description)
+                description,
+
+            )
             db.putTyped(projectsColumn, projectName, project)
             return project
-        }
+            */
+            TODO()
+         }
 
         fun retrieveProject(name: String): Project {
             repos.users.validatePermissions(auth, Action.Read, name)

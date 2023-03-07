@@ -47,7 +47,7 @@ data class ArtifactVersion(
     val artifactType: String,
     val timestamp: Instant,
     val creator: String,
-    val contentId: ContentId,
+    val content: ByteArray,
     val parents: List<Id<ArtifactVersion>>,
     val metadata: Map<String, String>,
     val status: Status
@@ -139,7 +139,7 @@ class Artifacts(val db: RocksDB,
         fun createVersion(project: String,
                           artifactId: Id<Artifact>,
                           artifactType: String,
-                          contentId: ContentId,
+                          content: ByteArray,
                           parents: List<Id<ArtifactVersion>>,
                           metadata: Map<String, String>): ArtifactVersion {
             repos.users.validatePermissions(auth, Action.Write, project)
@@ -147,7 +147,7 @@ class Artifacts(val db: RocksDB,
                 id = newId<ArtifactVersion>("ver"),
                 artifactId = artifactId,
                 creator = auth.userId,
-                contentId = contentId,
+                content = content,
                 timestamp = Instant.now(),
                 parents = parents,
                 metadata = metadata,
@@ -174,7 +174,7 @@ class Artifacts(val db: RocksDB,
                 id = newId<ArtifactVersion>("artifact"),
                 artifactId = base.artifactId,
                 artifactType = base.artifactType,
-                contentId = base.contentId,
+                content = base.content,
                 creator = auth.userId,
                 timestamp = Instant.now(),
                 metadata = base.metadata,
@@ -207,10 +207,6 @@ class Artifacts(val db: RocksDB,
                     throw e
                 }
             }
-
-            if (old.contentId != version.contentId) {
-                repos.storage.deleteTransientBlob(old.contentId)
-            }
             db.putTyped(versionsColumn, newVersion.id, newVersion)
             return newVersion
         }
@@ -236,11 +232,8 @@ class Artifacts(val db: RocksDB,
                     throw e
                 }
             }
-            val content = repos.storage.retrieveBlob(version.contentId)
-            val permanentContentId = repos.storage.storeBlob(content)
             db.putTyped(versionsColumn, version.id, version.copy(
                 status = ArtifactVersion.Status.Committed,
-                contentId = permanentContentId,
                 timestamp = now
             ))
         }
@@ -266,11 +259,11 @@ class Artifacts(val db: RocksDB,
                     throw e
                 }
             }
-            repos.storage.deleteTransientBlob(version.contentId)
             db.putTyped(versionsColumn, version.id,
                 version.copy(
                     status = ArtifactVersion.Status.Aborted,
-                    timestamp = now
+                    timestamp = now,
+                    content = ByteArray(0)
                 ))
 
         }

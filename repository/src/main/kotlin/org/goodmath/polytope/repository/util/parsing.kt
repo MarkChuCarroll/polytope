@@ -16,9 +16,18 @@
 
 package org.goodmath.polytope.repository.util
 
-import java.util.*
+import com.beust.klaxon.Klaxon
+import org.goodmath.polytope.PolytopeException
+import kotlin.text.Charsets.UTF_8
 
-typealias Id<T> = String
-fun<T> newId(kind: String) = kind + ":" + UUID.randomUUID().toString()
+object ParsingCommons {
+    val klaxon = Klaxon()
+}
 
-fun<T> idFrom(s: String): Id<T> = s
+inline fun<reified T> Klaxon.parse(bytes: ByteArray): T =
+    ParsingCommons.klaxon.parse<T>(bytes.toString(UTF_8))
+        ?: throw PolytopeException(PolytopeException.Kind.Parsing,
+            "Error parsing json representation")
+
+fun<T> Klaxon.toBytes(t: T): ByteArray =
+    ParsingCommons.klaxon.toJsonString(t).toByteArray(UTF_8)

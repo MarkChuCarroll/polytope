@@ -15,14 +15,16 @@
  */
 package org.goodmath.polytope.repository.data
 
+import kotlinx.serialization.Serializable
 import maryk.rocksdb.ColumnFamilyHandle
 import maryk.rocksdb.RocksDB
 import org.goodmath.polytope.PolytopeException
 import org.goodmath.polytope.repository.Repository
 import org.goodmath.polytope.repository.util.*
 import java.time.Instant
-import kotlin.text.Charsets.UTF_8
 
+
+@Serializable
 data class Change(
     val id: Id<Change>,
     val project: String,
@@ -30,17 +32,18 @@ data class Change(
     val history: String,
     val basis: ProjectVersionSpecifier,
     val description: String,
-    val timestamp: Instant,
+    val timestamp: Long,
     val baseline: Id<ArtifactVersion>,
     val steps: List<Id<ChangeStep>>,
     val isOpen: Boolean)
 
+@Serializable
 data class ArtifactChange(
     val id: Id<ChangeStep>,
     val versionIdBefore: Id<ArtifactVersion>?,
     val versionIdAfter: Id<ArtifactVersion>?)
 
-
+@Serializable
 data class ChangeStep(
     val id: Id<ChangeStep>,
     val changeId: Id<Change>,
@@ -49,7 +52,7 @@ data class ChangeStep(
     val basis: ProjectVersionSpecifier,
     val baselineVersion: Id<ArtifactVersion>,
     val artifactChanges: List<ArtifactChange>,
-    val timestamp: Instant)
+    val timestamp: Long)
 
 class Changes(val db: RocksDB, val changesColumn: ColumnFamilyHandle,
               val stepsColumn: ColumnFamilyHandle,
@@ -72,9 +75,26 @@ class Changes(val db: RocksDB, val changesColumn: ColumnFamilyHandle,
             return c
         }
 
-        fun saveChange(change: Change) {
-            repos.users.validatePermissions(auth, Action.Write, change.project)
+        fun createChange(
+            projectName: String,
+            changeName: String,
+            history: String,
+            basis: ProjectVersionSpecifier,
+            description: String): Change {
+            repos.users.validatePermissions(auth, Action.Write, projectName)
+            val project = repos.projects.withAuth(auth).retrieveProject(projectName)
+            val change = Change(id=newId<Change>("change"),
+                project=projectName,
+                name=changeName,
+                history=history,
+                baseline = project.baseline,
+                basis = basis,
+                description = description,
+                steps = listOf(),
+                isOpen = true,
+                timestamp = Instant.now().toEpochMilli())
             db.putTyped(changesColumn, change.id, change)
+            return change
         }
 
         fun close(project: String, changeId: Id<Change>)  {
@@ -89,9 +109,24 @@ class Changes(val db: RocksDB, val changesColumn: ColumnFamilyHandle,
             return change.isOpen
         }
 
-        fun saveChangestep(project: String, step: ChangeStep) {
+        fun saveChangestep(project: String,
+                           change: Id<Change>,
+                           artifactChanges: List<ArtifactChange>,
+                           description: String,
+                           basis: ProjectVersionSpecifier,
+                           baselineVersion: Id<ArtifactVersion>): ChangeStep {
             repos.users.validatePermissions(auth, Action.Write, project)
+            val step = ChangeStep(
+                id = newId<ChangeStep>("cs"),
+                changeId = change,
+                artifactChanges = artifactChanges,
+                basis = basis,
+                baselineVersion = baselineVersion,
+                creator = auth.userId,
+                description = description,
+                timestamp = Instant.now().toEpochMilli())
             db.putTyped(stepsColumn, step.id, step)
+            return step
         }
 
         fun retrieveStep(project: String, stepId: Id<ChangeStep>): ChangeStep {

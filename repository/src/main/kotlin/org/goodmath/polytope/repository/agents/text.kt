@@ -14,11 +14,27 @@
  * limitations under the License.
  */
 
-package org.goodmath.polytope.repository.util
+package org.goodmath.polytope.repository.agents
 
-import java.util.*
+import org.goodmath.polytope.repository.data.ArtifactVersion
 
-typealias Id<T> = String
-fun<T> newId(kind: String) = kind + ":" + UUID.randomUUID().toString()
+data class Text(
+    val content: List<String>
+)
 
-fun<T> idFrom(s: String): Id<T> = s
+class TextAgent(): Agent<Text> {
+    override val artifactType: String = "text"
+
+    override fun fromBytes(content: ByteArray): Text {
+        TODO("Not yet implemented")
+    }
+
+    override fun merge(ancestor: ArtifactVersion, source: ArtifactVersion, target: ArtifactVersion): MergeResult {
+        TODO("Not yet implemented")
+    }
+
+    override fun toBytes(content: Text): ByteArray {
+        TODO("Not yet implemented")
+    }
+
+}

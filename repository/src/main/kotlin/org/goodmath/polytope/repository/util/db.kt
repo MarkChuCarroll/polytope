@@ -16,15 +16,11 @@
 
 package org.goodmath.polytope.repository.util
 
-import com.beust.klaxon.Klaxon
-import io.mockk.InternalPlatformDsl.toStr
 import maryk.rocksdb.ColumnFamilyHandle
 import maryk.rocksdb.RocksDB
 import kotlin.text.Charsets.UTF_8
 
-object DatabaseCommons {
-    val klaxon = Klaxon()
-}
+
 
 fun RocksDB.put(key: String, value: String) {
     val keyBytes = key.toByteArray(UTF_8)
@@ -39,23 +35,23 @@ fun RocksDB.put(cf: ColumnFamilyHandle, key: String, value: String) {
 }
 
 fun<T> RocksDB.putTyped(key: String, value: T) {
-    this.put(key, DatabaseCommons.klaxon.toJsonString(value))
+    this.put(key, ParsingCommons.klaxon.toJsonString(value))
 }
 
 fun<T> RocksDB.putTyped(cf: ColumnFamilyHandle, key: String, value: T) {
-    this.put(cf, key, DatabaseCommons.klaxon.toJsonString(value))
+    this.put(cf, key, ParsingCommons.klaxon.toJsonString(value))
 }
 
 inline fun<reified T> RocksDB.getTyped(key: String): T? {
     val keyBytes = key.toByteArray(UTF_8)
     val resultBytes = this.get(keyBytes)
-    return DatabaseCommons.klaxon.parse<T>(resultBytes.toString(UTF_8))
+    return ParsingCommons.klaxon.parse<T>(resultBytes)
 }
 
 inline fun<reified T> RocksDB.getTyped(cf: ColumnFamilyHandle, key: String): T? {
     val keyBytes = key.toByteArray(UTF_8)
     val resultBytes = this.get(cf, keyBytes)
-    return DatabaseCommons.klaxon.parse<T>(resultBytes.toString(UTF_8))
+    return ParsingCommons.klaxon.parse<T>(resultBytes)
 }
 
 inline fun<reified T> RocksDB.list(cf: ColumnFamilyHandle,
@@ -64,7 +60,7 @@ inline fun<reified T> RocksDB.list(cf: ColumnFamilyHandle,
     val result: MutableList<T> = mutableListOf()
     iter.seekToFirst()
     while (iter.isValid) {
-        val next = DatabaseCommons.klaxon.parse<T>(iter.value().toString(UTF_8))
+        val next = ParsingCommons.klaxon.parse<T>(iter.value())
         if (next != null && pred(next)) {
             result.add(next)
         }

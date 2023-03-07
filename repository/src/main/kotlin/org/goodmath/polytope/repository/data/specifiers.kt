@@ -15,65 +15,13 @@
  */
 package org.goodmath.polytope.repository.data
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import org.goodmath.polytope.PolytopeException
-import org.litote.kmongo.Id
-import org.litote.kmongo.id.StringId
-import org.litote.kmongo.toId
+import org.goodmath.polytope.repository.util.Id
 
-sealed interface ProjectVersionSpecifier {
-    enum class Kind {
-        History, ChangeId, ChangeName, ChangeStepId
-    }
-
-    val kind: Kind
-    val project: String
-
-    data class HistoryPVS(
-        override val project: String,
-        val historyName: String,
-        val version: Int?
-    ) : ProjectVersionSpecifier {
-        override val kind: Kind = Kind.History
-        override fun toString(): String {
-            return if (version == null) {
-                return "history($project@$historyName)"
-            } else {
-                return "history($project@historyName@$version)"
-            }
-        }
-    }
-
-    data class ChangeIdPVS(
-        override val project: String,
-        val changeId: Id<Change>
-    ) : ProjectVersionSpecifier {
-        override val kind: Kind = Kind.ChangeId
-
-        override fun toString(): String {
-            return "changeId($project@$changeId)"
-        }
-    }
-
-    data class ChangeNamePVS(
-        override val project: String,
-        val changeName: String
-    ) : ProjectVersionSpecifier {
-        override val kind: Kind = Kind.ChangeName
-        override fun toString(): String {
-            return "changeName($project@$changeName)"
-        }
-    }
-
-    data class ChangeStepPVS(
-        override val project: String,
-        val changeStepId: Id<ChangeStep>
-    ) : ProjectVersionSpecifier {
-        override val kind: Kind = Kind.ChangeStepId
-        override fun toString(): String {
-            return "changeStep($project@$changeStepId)"
-        }
-    }
-
+@Serializable
+sealed class ProjectVersionSpecifier {
     companion object {
         private val pvsRe = Regex("(\\w*)\\((.*)\\)")
 
@@ -83,31 +31,35 @@ sealed interface ProjectVersionSpecifier {
         // changeSteph(project@id)
         fun fromString(s: String): ProjectVersionSpecifier {
             val matches = pvsRe.matchEntire(s) ?: throw PolytopeException(
-                    PolytopeException.Kind.InvalidParameter,
-                    "Invalid project version specifier"
-                )
+                PolytopeException.Kind.InvalidParameter,
+                "Invalid project version specifier"
+            )
             val (kind, spec) = matches.destructured
-            return when (kind) {
+            when (kind) {
                 "history" -> {
                     val specParts = spec.split("@")
-                    return if (specParts.size == 2) {
-                        ProjectVersionSpecifier.HistoryPVS(specParts[0], specParts[1], null)
-                    } else if (specParts.size == 3) {
-                        ProjectVersionSpecifier.HistoryPVS(
-                            specParts[0],
-                            specParts[1], specParts[2].toInt()
-                        )
-                    } else {
-                        throw PolytopeException(
-                            PolytopeException.Kind.InvalidParameter,
-                            "Invalid project version specifier string '$s'"
-                        )
+                    return when (specParts.size) {
+                        2 -> {
+                            HistoryPVS(specParts[0], specParts[1], null)
+                        }
+                        3 -> {
+                            HistoryPVS(
+                                specParts[0],
+                                specParts[1], specParts[2].toInt()
+                            )
+                        }
+                        else -> {
+                            throw PolytopeException(
+                                PolytopeException.Kind.InvalidParameter,
+                                "Invalid project version specifier string '$s'"
+                            )
+                        }
                     }
                 }
                 "changeName" -> {
                     val specParts = spec.split("@")
                     return if (specParts.size == 2) {
-                        ProjectVersionSpecifier.ChangeNamePVS(
+                        ChangeNamePVS(
                             specParts[0],
                             specParts[1]
                         )
@@ -121,8 +73,8 @@ sealed interface ProjectVersionSpecifier {
                 "changeId" -> {
                     val specParts = spec.split("@")
                     return if (specParts.size == 2) {
-                        ProjectVersionSpecifier.ChangeIdPVS(
-                            specParts[0], specParts[1].toId()
+                        ChangeIdPVS(
+                            specParts[0], specParts[1]
                         )
                     } else {
                         throw PolytopeException(
@@ -134,8 +86,8 @@ sealed interface ProjectVersionSpecifier {
                 "changeStepId" -> {
                     val specParts = spec.split("@")
                     return if (specParts.size == 2) {
-                        ProjectVersionSpecifier.ChangeStepPVS(
-                            specParts[0], StringId<ChangeStep>(specParts[1])
+                        ChangeStepPVS(
+                            specParts[0], specParts[1]
                         )
                     } else {
                         throw PolytopeException(
@@ -153,3 +105,50 @@ sealed interface ProjectVersionSpecifier {
         }
     }
 }
+
+@Serializable
+@SerialName("history")
+data class HistoryPVS(
+    val project: String,
+    val historyName: String,
+    val version: Int?
+) : ProjectVersionSpecifier() {
+    override fun toString(): String =
+        if (version == null) {
+            "history($project@$historyName)"
+        } else {
+            "history($project@historyName@$version)"
+        }
+}
+
+@Serializable
+@SerialName("changeid")
+data class ChangeIdPVS(
+    val project: String,
+    val changeId: Id<Change>
+) : ProjectVersionSpecifier() {
+    override fun toString(): String {
+        return "changeId($project@$changeId)"
+    }
+}
+
+@Serializable
+@SerialName("changename")
+data class ChangeNamePVS(
+    val project: String,
+    val changeName: String
+) : ProjectVersionSpecifier() {
+    override fun toString(): String =
+        "changeName($project@$changeName)"
+}
+
+@Serializable
+@SerialName("changestep")
+data class ChangeStepPVS(
+    val project: String,
+    val changeStepId: Id<ChangeStep>
+) : ProjectVersionSpecifier() {
+    override fun toString(): String =
+        "changeStep($project@$changeStepId)"
+}
+
